@@ -17,8 +17,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
+	
 	"github.com/mmpx12/optionparser"
+	"github.com/fatih/color"
 )
 
 var (
@@ -26,10 +27,10 @@ var (
 	mu        = &sync.Mutex{}
 	thread    = make(chan struct{}, 50)
 	wg        sync.WaitGroup
-	output    = "found_env.txt"
+	output    = "env_results.txt"
 	proxy     string
 	insecure  bool
-	version   = "1.0.2"
+	version   = "1.0.3"
 	userAgent = "Mozilla/5.0 (X11; Linux x86_64)"
 	path      = []string{"/.env"}
 )
@@ -43,7 +44,7 @@ func CheckEnv(client *http.Client, url, path string) {
 	}
 	req.Header.Add("User-Agent", userAgent)
 	//prevent RAM exhaustion from large body
-	req.Header.Set("Range", "bytes=0-4000")
+	req.Header.Set("Range", "bytes=0-6000")
 	resp, err := client.Do(req)
 	if err != nil {
 		<-thread
@@ -54,7 +55,7 @@ func CheckEnv(client *http.Client, url, path string) {
 	}
 
 	//prevent RAM exhaustion from large body if range header isn't honored
-	body, err := ioutil.ReadAll(io.LimitReader(resp.Body, 4000))
+	body, err := ioutil.ReadAll(io.LimitReader(resp.Body, 6000))
 	if err != nil {
 		<-thread
 		return
@@ -75,10 +76,14 @@ func CheckEnv(client *http.Client, url, path string) {
 			mu.Lock()
 			atomic.AddInt32(&success, 1)
 			WriteToFile("============================\n" + resp.Request.URL.String())
-			fmt.Println("\033[1K\r\033[32mENV FOUND:\033[36m", resp.Request.URL.String()+"\033[0m")
+			color.Set(color.FgRed)
+			fmt.Println("\033[1K\rENV FOUND:", resp.Request.URL.String())
+			color.Unset()
 			for _, j := range all {
 				key, val, _ := strings.Cut(j, "=")
-				fmt.Printf("\033[33m%s\033[37m=\033[35m%s\n", key, val)
+				color.Set(color.FgYellow)
+				fmt.Printf("%s=%s\n", key, val)
+				color.Unset()
 				WriteToFile(key + "=" + val)
 			}
 			mu.Unlock()
@@ -117,7 +122,10 @@ func main() {
 	var threads, input, env string
 	var printversion bool
 	op := optionparser.NewOptionParser()
+	color.Set(color.FgMagenta)
 	op.Banner = "Scan for exposed env file\n\nUsage:\n"
+	color.Unset()
+	color.Set(color.FgBlue)
 	op.On("-t", "--thread NBR", "Number of threads (default 50)", &threads)
 	op.On("-o", "--output FILE", "Output file (default found_env.txt)", &output)
 	op.On("-i", "--input FILE", "Input file", &input)
@@ -128,9 +136,10 @@ func main() {
 	op.On("-V", "--version", "Print version and exit", &printversion)
 	op.Exemple("xenv -i alexa-top-1M.lst")
 	op.Exemple("xenv -k -e /.env,/api/.env,/admin/.env -i alexa-top-1M.lst")
+	color.Unset()
 	op.Parse()
 	fmt.Printf("\033[31m")
-	op.Logo("[X-env]", "doom", false)
+	op.Logo("[Axceria Enterprise .Env Inspector]", "doom", false)
 	fmt.Printf("\033[0m")
 
 	if printversion {
@@ -144,7 +153,7 @@ func main() {
 	}
 
 	if input == "" {
-		fmt.Println("\033[31m[!] You must specify an input file\033[0m\n")
+		fmt.Println("[!] Input file not specified / does not exist.")
 		op.Help()
 		os.Exit(1)
 	}
@@ -187,7 +196,7 @@ func main() {
 		for _, p := range path {
 			i++
 			mu.Lock()
-			fmt.Printf("\033[1K\r\033[31m[\033[33m%d\033[36m/\033[33m%d \033[36m(\033[32m%d\033[36m)\033[31m] \033[0m%s%s\033[0m", i, total, int(success), target, p)
+			fmt.Printf("\033[1K\r[%d/%d (%d)] %s%s", i, total, int(success), target, p)
 			mu.Unlock()
 			thread <- struct{}{}
 			wg.Add(1)
